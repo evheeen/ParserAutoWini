@@ -15,7 +15,7 @@ def proxyAuth(username, password):
     pyautogui.press('enter')
     
     
-def parseAndTransfer(year, carBrand, fuelType, proxyIp):
+def parseAndTransfer(year, carBrand, fuelType, startPage, endPage, proxyIp):
     print(f'Parsing {fuelType} {carBrand} {year}-')
     option = webdriver.ChromeOptions()
     # option.add_argument('headless')
@@ -49,7 +49,7 @@ def parseAndTransfer(year, carBrand, fuelType, proxyIp):
         foundResualts = driver.find_element_by_class_name('boxCount').text[16:]
         foundResualts = str.replace(foundResualts, ',', '')
         foundResualts = int(foundResualts[0:-6])
-        if foundResualts < 40:
+        if foundResualts < 30:
             getLinksUl = driver.find_element_by_class_name('listBox')
             getLinksLi = getLinksUl.find_elements_by_xpath('.//li')
             for li in getLinksLi:
@@ -59,15 +59,19 @@ def parseAndTransfer(year, carBrand, fuelType, proxyIp):
             if len(links) > 0:
                 parse(links, driver)
         else:
+            if startPage > endPage:
+                startPage, endPage = endPage, startPage
+            if (endPage*30 + 30) >= foundResualts:
+                endPage = int(round(foundResualts/30, 0) + 1)
             time.sleep(0.5)
-            pages = round(foundResualts / 30) + 1
-            for page in range(pages-1):
+            driver.execute_script(f"javascript:CmPageMove({startPage})")
+            for page in range(endPage-startPage+1):
                 getLinksUl = driver.find_element_by_class_name('listBox')
                 getLinksLi = getLinksUl.find_elements_by_xpath('.//li')
                 for li in getLinksLi:
                     li = li.find_element_by_xpath('.//a')
                     links.append(li.get_attribute('href'))
-                driver.execute_script(f"javascript:CmPageMove('{page+2}')")
+                driver.execute_script(f"javascript:CmPageMove('{startPage+page+1}')")
             print('Found ', len(links), 'goods')
             if len(links) > 0:
                 parse(links, driver)
@@ -82,34 +86,29 @@ def parseAndTransfer(year, carBrand, fuelType, proxyIp):
 def imagesFTP(links, dirName, connect, lastId):
     path = os.getcwd()+"\\temp\\"+dirName
     try:
-        # Create directory
         os.mkdir(path)
     except OSError as er:
-        print('Creation directory for load images failed\nError:',er)
+        print('Creation directory for load images failed\nError:', er)
     else:
         print('\tDirectory created')
         for link in links:
             index = links.index(link) + 1
             r = requests.get(link, allow_redirects=True)
-            # Download file
             open(f"{path}\\{dirName}({index}).jpg", "wb").write(r.content)
             try:
                 fileToSend = open(f'{path}\\{dirName}({index}).jpg', "rb")
-                # Connect FTP server
-                ftp = ftplib.FTP(host="hostname or ip", user="username", passwd="password")
+                ftp = ftplib.FTP(host="host0", user="username", passwd="password")
                 ftp.cwd('/img/uploads/prebg/')
                 ftp.storbinary(f'STOR {dirName}({index}).jpg', fileToSend)
                 fileToSend.close()
                 ftp.close()
                 
-                # Insert into DB(Table with images)
                 addImage = f"INSERT INTO `ns_images`(`itemId`, `number`, `previewsm`, `previewmed`, `previewbg`)" \
                            f"VALUES ({lastId}, {index}, 'img//uploads//prebg//{dirName}({index}).jpg', 'img//uploads//prebg//{dirName}({index}).jpg', 'img//uploads//prebg//{dirName}({index}).jpg')"
                 executeQuery(connect, addImage, f'Image {index}')
             except Exception as e:
                 print('Error:', e)
         try:
-            # Delete created directory
             rmtree(path, ignore_errors=True)
         except Exception as exc:
             print('Warning:', exc)
@@ -174,11 +173,13 @@ def parse(links, driver):
         
         # Video
         videoA = driver.find_element_by_class_name('detailImg').find_elements_by_class_name('btnVideo')
+        videoError = driver.find_elements_by_class_name('ytp-error-content-wrap-reason')
         if len(videoA) > 0:
-            videoA[0].click()
-            videoUrl = driver.find_element_by_class_name('detail_Youtube').get_attribute('src')
-            videoUrl = str.replace(videoUrl, '&autoplay=1', '&autoplay=0')
-            driver.execute_script('javascript:youtubePopClose()')
+            if len(videoA) == 0:
+                videoA[0].click()
+                videoUrl = driver.find_element_by_class_name('detail_Youtube').get_attribute('src')
+                videoUrl = str.replace(videoUrl, '&autoplay=1', '&autoplay=0')
+                driver.execute_script('javascript:youtubePopClose()')
         else:
             videoUrl = ''
         
@@ -206,6 +207,53 @@ def parse(links, driver):
         price = str.replace(price, 'USD ', '')
         price = float(str.replace(price, ',', ''))
         
+        if carType == 'Sedan':  # carType = 'Седан'
+            chars += '|69|'
+        elif carType == 'SUV':  # carType = 'Кроссовер'
+            chars += '|66|'
+        elif carType == 'Van/MiniVan':  # carType = 'Минивэн'
+            chars += '|68|'
+        elif carType == 'Hatchback':
+            carType = 'Хэтчбек'
+        elif carType == 'Convertible':  # carType = 'Кабриолет'
+            chars += '|65|'
+        
+        if engineTypeDB == 'Gasoline':
+            engineTypeDB = 'Бензин'
+            chars += '|79|'
+        elif engineTypeDB == 'LPG':
+            engineTypeDB = 'Газ'
+            chars += '|82|'
+        
+        if transmissionDB == 'Automatic':
+            transmissionDB = 'Автомат'
+            chars += '|31|'
+        elif transmissionDB == 'Manual':
+            transmissionDB = 'Механика'
+            chars += '|32|'
+        
+        if driveTypeDB == 'Front 2WD':
+            driveTypeDB = 'Передний'
+            chars += '|72|'
+        elif driveTypeDB == '4 Wheel Drive':
+            driveTypeDB = 'Полный'
+            chars += '|73|'
+        elif driveTypeDB == 'Rear 2WD':
+            driveTypeDB = 'Задний'
+            chars += '|71|'
+            
+        # filterParamId
+        if markaDB == 'Kia':  # Car Brand
+            chars += '|86|'
+        if markaDB == 'Hyundai':
+            chars += '|85|'
+        if markaDB == 'Toyota':
+            chars += '|115|'
+        if markaDB == 'Lexus':
+            chars += '|107|'
+        if markaDB == 'Genesis':
+            chars += '|93|'
+        
         engineCapacityDB = engineCapacityDB[:-2]
         engineCapacityDB = str.replace(engineCapacityDB, ' ', '')
         engineCapacityDB = round(float(str.replace(engineCapacityDB, ',', '.')), 1)
@@ -213,7 +261,7 @@ def parse(links, driver):
             engineCapacityDB = 1.0
         
         print('Parsing', markaDB, modelDB, yearManDB)
-        
+
         # Adding cars to your database
         # Example
         insertQuery = f"INSERT INTO `ns_goods`" \
@@ -265,7 +313,7 @@ def mysqlConnecting():
         print(f"Error: {err}")
     return connection
 
-# Function for SELECT query to DB
+
 def readQuery(connection, query):
     cursor = connection.cursor()
     try:
@@ -275,7 +323,7 @@ def readQuery(connection, query):
     except Error as err:
         print(f"Error: {err}")
 
-# Function for INSERT query to DB
+
 def executeQuery(connection, query, str):
     cursor = connection.cursor()
     try:
@@ -287,67 +335,29 @@ def executeQuery(connection, query, str):
 
 
 def parsing():
-    proxies = ['ip:port']  # , ip:port , ip:port , ip:port]
+    proxies = ['ip:port']  # , ... , ... , ...]
+    carBrand = input('Enter car brand Hyundai/Kia/Genesis/Toyota/Lexus: ')
+    fuelType = input('Enter fuel type Gasoline/LPG: ')
+    startPage = int(input('Enter start page: '))
+    endPage = int(input('Enter end page: '))
     try:
-        parseAndTransfer('2018', 'Hyundai', 'Gasoline', proxies[0])
-        parseAndTransfer('2018', 'Hyundai', 'LPG', proxies[0])
-
-        parseAndTransfer('2018', 'Kia', 'Gasoline', proxies[0])
-        parseAndTransfer('2018', 'Kia', 'LPG', proxies[0])
-
-        parseAndTransfer('2018', 'Genesis', 'Gasoline', proxies[0])
-        parseAndTransfer('2018', 'Genesis', 'LPG', proxies[0])
-
-        parseAndTransfer('2018', 'Toyota', 'Gasoline', proxies[0])
-        parseAndTransfer('2018', 'Toyota', 'LPG', proxies[0])
-
-        parseAndTransfer('2018', 'Lexus', 'Gasoline', proxies[0])
-        parseAndTransfer('2018', 'Lexus', 'LPG', proxies[0])
-
+        parseAndTransfer('2018', carBrand, fuelType, startPage, endPage, proxies[0])
         print('\nParsing completed')
         
     except Exception as error:
         print('\nError:', error)
-        try:
-            # parseAndTransfer('2018', 'Hyundai', 'Gasoline', proxies[1])
-            # parseAndTransfer('2018', 'Hyundai', 'LPG', proxies[1])
-    
-            # parseAndTransfer('2018', 'Kia', 'Gasoline', proxies[1])
-            # parseAndTransfer('2018', 'Kia', 'LPG', proxies[1])
-    
-            # parseAndTransfer('2018', 'Genesis', 'Gasoline', proxies[1])
-            # parseAndTransfer('2018', 'Genesis', 'LPG', proxies[1])
-    
-            # parseAndTransfer('2018', 'Toyota', 'Gasoline', proxies[1])
-            # parseAndTransfer('2018', 'Toyota', 'LPG', proxies[1])
-    
-            # parseAndTransfer('2018', 'Lexus', 'Gasoline', proxies[1])
-            # parseAndTransfer('2018', 'Lexus', 'LPG', proxies[1])
-    
-            print('\nParsing completed')
-
-        except Exception as error:
-            print('\nError:', error)
-            try:
-                # parseAndTransfer('2018', 'Hyundai', 'Gasoline', proxies[2])
-                # parseAndTransfer('2018', 'Hyundai', 'LPG', proxies[2])
-    
-                # parseAndTransfer('2018', 'Kia', 'Gasoline', proxies[2])
-                # parseAndTransfer('2018', 'Kia', 'LPG', proxies[2])
-    
-                # parseAndTransfer('2018', 'Genesis', 'Gasoline', proxies[2])
-                # parseAndTransfer('2018', 'Genesis', 'LPG', proxies[2])
-    
-                # parseAndTransfer('2018', 'Toyota', 'Gasoline', proxies[2])
-                # parseAndTransfer('2018', 'Toyota', 'LPG', proxies[2])
-    
-                # parseAndTransfer('2018', 'Lexus', 'Gasoline', proxies[2])
-                # parseAndTransfer('2018', 'Lexus', 'LPG', proxies[2])
-    
-                print('\nParsing completed')
-
-            except Exception as error:
-                print('\nError:', error)
+        # try:
+        #     parseAndTransfer('2018', carBrand, fuelType, startPage, endPage, proxies[1])
+        #     print('\nParsing completed')
+        #
+        # except Exception as error:
+        #     print('\nError:', error)
+        #     try:
+        #         parseAndTransfer('2018', carBrand, fuelType, startPage, endPage, proxies[2])
+        #         print('\nParsing completed')
+        #
+        #     except Exception as error:
+        #         print('\nError:', error)
         
 
 if __name__ == '__main__':
