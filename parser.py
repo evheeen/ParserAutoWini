@@ -13,8 +13,8 @@ def proxyAuth(username, password):
     pyautogui.press('tab')
     pyautogui.typewrite(password)
     pyautogui.press('enter')
-    
-    
+
+
 def parseAndTransfer(year, carBrand, fuelType, startPage, endPage, proxyIp):
     print(f'Parsing {fuelType} {carBrand} {year}-')
     option = webdriver.ChromeOptions()
@@ -41,7 +41,7 @@ def parseAndTransfer(year, carBrand, fuelType, startPage, endPage, proxyIp):
     fuel.select_by_visible_text(fuelType)
     driver.execute_script('javascript:fnLeftSearch()')
     time.sleep(1.5)
-
+    
     links = []
     checkNone = driver.find_elements_by_class_name('boxCount')
     if len(checkNone) == 1:
@@ -61,30 +61,30 @@ def parseAndTransfer(year, carBrand, fuelType, startPage, endPage, proxyIp):
         else:
             if startPage > endPage:
                 startPage, endPage = endPage, startPage
-            if (endPage*30 + 30) >= foundResualts:
-                endPage = int(round(foundResualts/30, 0) + 1)
+            if (endPage * 30 + 30) >= foundResualts:
+                endPage = int(round(foundResualts / 30, 0) + 1)
             time.sleep(0.5)
             driver.execute_script(f"javascript:CmPageMove({startPage})")
-            for page in range(endPage-startPage+1):
+            for page in range(endPage - startPage + 1):
                 getLinksUl = driver.find_element_by_class_name('listBox')
                 getLinksLi = getLinksUl.find_elements_by_xpath('.//li')
                 for li in getLinksLi:
                     li = li.find_element_by_xpath('.//a')
                     links.append(li.get_attribute('href'))
-                driver.execute_script(f"javascript:CmPageMove('{startPage+page+1}')")
+                driver.execute_script(f"javascript:CmPageMove('{startPage + page + 1}')")
             print('Found ', len(links), 'goods')
             if len(links) > 0:
                 parse(links, driver)
     elif len(checkNone) == 0:
         print(f'{carBrand} in this configuration is not found')
-                
+    
     time.sleep(2)
     driver.quit()
 
 
 # Download images and transfer via FTP and  MySQL
 def imagesFTP(links, dirName, connect, lastId):
-    path = os.getcwd()+"\\temp\\"+dirName
+    path = os.getcwd() + "\\temp\\" + dirName
     try:
         os.mkdir(path)
     except OSError as er:
@@ -97,11 +97,11 @@ def imagesFTP(links, dirName, connect, lastId):
             open(f"{path}\\{dirName}({index}).jpg", "wb").write(r.content)
             try:
                 fileToSend = open(f'{path}\\{dirName}({index}).jpg', "rb")
-                ftp = ftplib.FTP(host="host0", user="username", passwd="password")
-                ftp.cwd('/img/uploads/prebg/')
-                ftp.storbinary(f'STOR {dirName}({index}).jpg', fileToSend)
+                with ftplib.FTP(host="host", user="username", passwd="password") as ftp:
+                    ftp.cwd('/img/uploads/prebg/')
+                    ftp.storbinary(f'STOR {dirName}({index}).jpg', fileToSend)
+                    ftp.close()
                 fileToSend.close()
-                ftp.close()
                 
                 addImage = f"INSERT INTO `ns_images`(`itemId`, `number`, `previewsm`, `previewmed`, `previewbg`)" \
                            f"VALUES ({lastId}, {index}, 'img//uploads//prebg//{dirName}({index}).jpg', 'img//uploads//prebg//{dirName}({index}).jpg', 'img//uploads//prebg//{dirName}({index}).jpg')"
@@ -112,7 +112,7 @@ def imagesFTP(links, dirName, connect, lastId):
             rmtree(path, ignore_errors=True)
         except Exception as exc:
             print('Warning:', exc)
-   
+
 
 def parse(links, driver):
     connect = mysqlConnecting()
@@ -139,7 +139,7 @@ def parse(links, driver):
         if mileageDB == '- км (не оригинал) !':
             mileageDB = 'Пробег уточняйте у менеджера'
             mileage = 'Пробег уточняйте у менеджера'
-            
+        
         options = driver.find_elements_by_class_name('conOption')
         textDB = ' '
         if len(options) != 0:
@@ -241,7 +241,7 @@ def parse(links, driver):
         elif driveTypeDB == 'Rear 2WD':
             driveTypeDB = 'Задний'
             chars += '|71|'
-            
+        
         # filterParamId
         if markaDB == 'Kia':  # Car Brand
             chars += '|86|'
@@ -261,25 +261,25 @@ def parse(links, driver):
             engineCapacityDB = 1.0
         
         print('Parsing', markaDB, modelDB, yearManDB)
-
+        
         # Adding cars to your database
         # Example
         insertQuery = f"INSERT INTO `ns_goods`" \
                       f"(`topItem`, `tree`, `parent`, `visible`, `url`, `mainImage`, `popular`, `name`, `number`, `title`, `description`, `keywords`, `mainPrice`, `priceAllin`, `code`, `chars`, `brandId`, `price`, `units`, `info`, `textRight`, `text`, `changefreq`, `lastmod`, `priority`, `startPrice`, `valuteId`, `attributes`, `newItem`, `actPrice`, `startActPrice`, `attrPrice`, `actAttrPrice`, `mainAttrPrice`, `tree1`, `statusId`, `supplierCode`, `zakPrice`, `supplierId`, `upload`, `canBuy`, `quantity`, `percent`, `actionTime`, `actDate`, `actTime`, `tempid`, `colcom`, `rating`, `inOrder`, `marka`, `model`, `engineType`, `engineСapacity`, `mileage`, `transmission`, `driveType`, `yearMan`) " \
-                      f"VALUES(1, '|96|', 96, 1, '{URL+vin}', 'img//uploads//prebg//{URL+vin}(1).jpg', 0, '{nameDB}', 100, '', '', '', {price}, '{videoUrl}', '{vin}', '{chars}', 0, {price}, '', '', '', '{textDB}', 'always', '{timeNow}', 0.9, {price}, 1, '', 1, 0, 0, {price}, 0, {price}, '|96|', 7, '', 0, 0, 0, 1, 0, 0, 0, 0, '', '', 0, 0, 0, '{markaDB}', '{modelDB}', '{engineTypeDB}', '{engineCapacityDB}', 0, '{transmissionDB}', '{driveTypeDB}', '{yearManDB}')"
+                      f"VALUES(1, '|96|', 96, 1, '{URL + vin}', 'img//uploads//prebg//{URL + vin}(1).jpg', 0, '{nameDB}', 100, '', '', '', {price}, '{videoUrl}', '{vin}', '{chars}', 0, {price}, '', '', '', '{textDB}', 'always', '{timeNow}', 0.9, {price}, 1, '', 1, 0, 0, {price}, 0, {price}, '|96|', 7, '', 0, 0, 0, 1, 0, 0, 0, 0, '', '', 0, 0, 0, '{markaDB}', '{modelDB}', '{engineTypeDB}', '{engineCapacityDB}', 0, '{transmissionDB}', '{driveTypeDB}', '{yearManDB}')"
         executeQuery(connect, insertQuery, 'Row')
-
+        
         getLastId = f"SELECT * FROM `ns_goods` ORDER BY `itemId` DESC LIMIT 1"
         lastId = (readQuery(connect, getLastId))[0][0]
-
+        
         categoryQuery = f"INSERT INTO `ns_itemcatlink`(`categoryId`, `itemId`)" \
-                      f"VALUES (96, {lastId})"
+                        f"VALUES (96, {lastId})"
         executeQuery(connect, categoryQuery, 'Category')
         
         menuQuery = f"INSERT INTO `ns_sititem`(`name`, `param`, `itemId`, `bodyId`) " \
                     f"VALUES ('overhead1', 'chaptersMenu', {lastId}, '')"
         executeQuery(connect, menuQuery, 'Menu item')
-
+        
         menuQuery = f"INSERT INTO `ns_sititem`(`name`, `param`, `itemId`, `bodyId`) " \
                     f"VALUES ('megamenu', 'megaMenu', {lastId}, '')"
         executeQuery(connect, menuQuery, 'Menu item')
@@ -287,17 +287,17 @@ def parse(links, driver):
         filterQuery = f"INSERT INTO `ns_textparam`(`filterId`, `itemId`, `text`, `textInt`)" \
                       f"VALUES (28, {lastId}, '{engineCapacityDB}', {engineCapacityDB})"
         executeQuery(connect, filterQuery, 'Filter engineCapacity')
-
+        
         filterQuery = f"INSERT INTO `ns_textparam`(`filterId`, `itemId`, `text`, `textInt`)" \
                       f"VALUES (24, {lastId}, '{yearManDB}', {int(yearManDB)})"
         executeQuery(connect, filterQuery, 'Filter yearMan')
-
+        
         filterQuery = f"INSERT INTO `ns_textparam`(`filterId`, `itemId`, `text`, `textInt`)" \
                       f"VALUES (32, {lastId}, '{carClass}', 0)"
         executeQuery(connect, filterQuery, 'Filter completation')
         
-        imagesFTP(images, URL+vin, connect, lastId)
-        
+        imagesFTP(images, URL + vin, connect, lastId)
+
 
 def mysqlConnecting():
     connection = None
@@ -343,7 +343,7 @@ def parsing():
     try:
         parseAndTransfer('2018', carBrand, fuelType, startPage, endPage, proxies[0])
         print('\nParsing completed')
-        
+    
     except Exception as error:
         print('\nError:', error)
         # try:
@@ -358,7 +358,7 @@ def parsing():
         #
         #     except Exception as error:
         #         print('\nError:', error)
-        
+
 
 if __name__ == '__main__':
     parsing()
